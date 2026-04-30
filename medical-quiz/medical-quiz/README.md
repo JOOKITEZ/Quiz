@@ -1,0 +1,110 @@
+# 🏥 의사국가고시 필기 퀴즈 트레이너
+
+과목별 문제 풀기, 오답 복습, 정답률 통계를 제공하는 의사국가고시 대비 퀴즈 앱입니다.
+GitHub Pages로 즉시 배포 가능한 **순수 HTML/CSS/JS** 앱입니다.
+
+---
+
+## 📁 프로젝트 구조
+
+```
+medical-quiz/
+├── index.html              # 메인 앱
+├── css/
+│   └── style.css           # 스타일
+├── js/
+│   └── app.js              # 앱 로직
+└── data/
+    ├── 내과/
+    │   ├── 필수_187.json
+    │   └── ...
+    ├── 산부인과/
+    ├── 소아청소년과/
+    └── 응급의학과/
+```
+
+---
+
+## ➕ 문제 추가 방법
+
+### 1. JSON 파일 형식
+
+각 문제는 아래 형식의 JSON 파일이어야 합니다:
+
+```json
+{
+    "qa_id": 100,
+    "domain": 17,
+    "q_type": 1,
+    "question": "38세 여자가 ... \n1) 선택지1\n2) 선택지2\n3) 선택지3\n4) 선택지4\n5) 선택지5",
+    "answer": "1) 선택지1"
+}
+```
+
+- `question` 안에 선택지를 `\n1) ...` 형식으로 포함시키세요
+- `answer` 는 `"1) ..."` 형식으로 작성하세요
+
+### 2. 파일 등록
+
+`js/app.js` 상단의 `QUESTION_FILES` 객체에 파일 경로를 추가하세요:
+
+```javascript
+const QUESTION_FILES = {
+  '내과': [
+    'data/내과/필수_187.json',
+    'data/내과/필수_190.json',
+    // 여기에 추가
+    'data/내과/새문제_001.json',
+  ],
+  '산부인과': [
+    'data/산부인과/산부인과_001.json',
+    // 여기에 추가
+  ],
+  // ...
+};
+```
+
+---
+
+## 🚀 GitHub Pages 배포
+
+### 방법 1: GitHub.com에서 직접 업로드
+
+1. GitHub에서 새 repository 생성
+2. 모든 파일을 업로드
+3. Settings → Pages → Source: `main` branch, `/ (root)` 선택
+4. `https://[username].github.io/[repo-name]/` 로 접속
+
+### 방법 2: Git으로 배포
+
+```bash
+git init
+git add .
+git commit -m "Initial commit"
+git remote add origin https://github.com/[username]/[repo-name].git
+git push -u origin main
+```
+
+그 다음 GitHub Settings → Pages 에서 배포 활성화.
+
+---
+
+## ✨ 주요 기능
+
+| 기능 | 설명 |
+|------|------|
+| 과목별 퀴즈 | 내과, 산부인과, 소아청소년과, 응급의학과 |
+| 랜덤 출제 | 문제를 매번 다른 순서로 출제 |
+| 즉각 피드백 | 정답/오답 즉시 표시 |
+| 오답 저장 | LocalStorage에 오답 자동 저장 (브라우저에 영구 저장) |
+| 오답 복습 | 틀린 문제만 모아서 다시 풀기 |
+| 복습 성공 제거 | 오답을 맞히면 오답 목록에서 자동 삭제 |
+| 통계 | 전체 정답률, 총 풀이 수 누적 |
+
+---
+
+## 💡 참고사항
+
+- 오답은 **브라우저 LocalStorage**에 저장됩니다 (계정 불필요, 같은 브라우저/기기에서 유지)
+- 백엔드 서버 없이 동작하는 정적 웹앱입니다
+- Python 백엔드(`python -m http.server 8000`)로 로컬 테스트 가능

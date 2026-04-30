@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>의사국가고시 필기 퀴즈</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700;900&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- LANDING PAGE -->
+<div id="page-landing" class="page active">
+  <div class="landing-bg">
+    <div class="grid-overlay"></div>
+    <div class="pulse-circle c1"></div>
+    <div class="pulse-circle c2"></div>
+    <div class="pulse-circle c3"></div>
+  </div>
+
+  <header class="landing-header">
+    <div class="logo-mark">M</div>
+    <span class="logo-text">MedQuiz</span>
+  </header>
+
+  <main class="landing-main">
+    <div class="landing-eyebrow">의사국가고시 필기 대비</div>
+    <h1 class="landing-title">
+      <span class="title-line">임상의학</span>
+      <span class="title-line accent">퀴즈 트레이너</span>
+    </h1>
+    <p class="landing-sub">과목별 문제 풀기 · 오답 집중 복습 · 실력 분석</p>
+
+    <div class="dept-grid">
+      <button class="dept-card" data-dept="내과" onclick="startQuiz('내과')">
+        <div class="dept-icon">🫀</div>
+        <div class="dept-name">내과</div>
+        <div class="dept-label">Internal Medicine</div>
+        <div class="dept-arrow">→</div>
+      </button>
+      <button class="dept-card" data-dept="산부인과" onclick="startQuiz('산부인과')">
+        <div class="dept-icon">🤱</div>
+        <div class="dept-name">산부인과</div>
+        <div class="dept-label">Obstetrics & Gynecology</div>
+        <div class="dept-arrow">→</div>
+      </button>
+      <button class="dept-card" data-dept="소아청소년과" onclick="startQuiz('소아청소년과')">
+        <div class="dept-icon">🧒</div>
+        <div class="dept-name">소아청소년과</div>
+        <div class="dept-label">Pediatrics</div>
+        <div class="dept-arrow">→</div>
+      </button>
+      <button class="dept-card" data-dept="응급의학과" onclick="startQuiz('응급의학과')">
+        <div class="dept-icon">🚨</div>
+        <div class="dept-name">응급의학과</div>
+        <div class="dept-label">Emergency Medicine</div>
+        <div class="dept-arrow">→</div>
+      </button>
+    </div>
+
+    <div class="review-section">
+      <button class="review-btn" onclick="startReview()">
+        <span class="review-icon">📋</span>
+        <span>오답 복습하기</span>
+        <span class="review-count" id="wrong-count-badge">0문제</span>
+      </button>
+    </div>
+
+    <div class="stats-bar" id="stats-bar">
+      <div class="stat-item">
+        <span class="stat-num" id="stat-total">0</span>
+        <span class="stat-label">총 풀이</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-num correct" id="stat-correct">0</span>
+        <span class="stat-label">정답</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-num wrong" id="stat-wrong">0</span>
+        <span class="stat-label">오답</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-num rate" id="stat-rate">0%</span>
+        <span class="stat-label">정답률</span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- QUIZ PAGE -->
+<div id="page-quiz" class="page">
+  <div class="quiz-topbar">
+    <button class="back-btn" onclick="goHome()">← 홈</button>
+    <div class="quiz-progress-info">
+      <span id="quiz-dept-label" class="dept-badge"></span>
+      <span id="quiz-counter">1 / 10</span>
+    </div>
+    <div class="quiz-score-mini">
+      <span class="correct-mini" id="mini-correct">✓ 0</span>
+      <span class="wrong-mini" id="mini-wrong">✗ 0</span>
+    </div>
+  </div>
+
+  <div class="progress-track">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+
+  <div class="quiz-body">
+    <div class="question-card" id="question-card">
+      <div class="q-number" id="q-number">Q.1</div>
+      <div class="q-text" id="q-text"></div>
+    </div>
+
+    <div class="choices-list" id="choices-list"></div>
+
+    <div class="answer-reveal" id="answer-reveal">
+      <div class="answer-banner" id="answer-banner"></div>
+      <div class="answer-detail" id="answer-detail"></div>
+      <button class="next-btn" id="next-btn" onclick="nextQuestion()">다음 문제 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESULT PAGE -->
+<div id="page-result" class="page">
+  <div class="result-container">
+    <div class="result-emoji" id="result-emoji">🎉</div>
+    <h2 class="result-title" id="result-title">퀴즈 완료!</h2>
+    <div class="result-score-ring">
+      <svg viewBox="0 0 120 120" class="ring-svg">
+        <circle class="ring-bg" cx="60" cy="60" r="50"/>
+        <circle class="ring-fg" cx="60" cy="60" r="50" id="score-ring"/>
+      </svg>
+      <div class="ring-label">
+        <span class="ring-pct" id="ring-pct">0%</span>
+        <span class="ring-sub">정답률</span>
+      </div>
+    </div>
+    <div class="result-stats">
+      <div class="rs-item">
+        <span class="rs-num correct" id="res-correct">0</span>
+        <span class="rs-label">정답</span>
+      </div>
+      <div class="rs-item">
+        <span class="rs-num wrong" id="res-wrong">0</span>
+        <span class="rs-label">오답</span>
+      </div>
+      <div class="rs-item">
+        <span class="rs-num" id="res-total">0</span>
+        <span class="rs-label">전체</span>
+      </div>
+    </div>
+    <div class="result-actions">
+      <button class="action-btn primary" onclick="retryWrong()" id="retry-wrong-btn">오답만 다시 풀기</button>
+      <button class="action-btn secondary" onclick="restartSame()">같은 과목 다시</button>
+      <button class="action-btn ghost" onclick="goHome()">홈으로</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
