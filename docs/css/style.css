@@ -46,6 +46,16 @@ body {
   display: block;
 }
 
+.page {
+  display: none;
+  width: 100%;
+  min-height: 100vh;
+}
+
+.page.active {
+  display: block;
+}
+
 a { color: var(--accent2); text-decoration: none; }
 
 /* ── Layout ─────────────────────── */
