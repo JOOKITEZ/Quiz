@@ -37,6 +37,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.page {
+  display: none;
+  min-height: 100vh;
+}
+
+.page.active {
+  display: block;
+}
+
 a { color: var(--accent2); text-decoration: none; }
 
 /* ── Layout ─────────────────────── */
