@@ -127,7 +127,12 @@ a { color: var(--accent2); text-decoration: none; }
 }
 .dept-card:hover::after { color: var(--text); transform: translateY(-50%) translateX(3px); }
 
-.dept-icon { font-size: 24px; }
+.dept-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  opacity: 0.75;
+}
 .dept-name { font-family: var(--font-serif); font-size: 18px; font-weight: 700; }
 .dept-eng  { font-size: 10px; color: var(--text3); letter-spacing: 0.06em; }
 
@@ -349,4 +354,47 @@ textarea.answer-input { min-height: 120px; resize: vertical; line-height: 1.7; }
   .question-card { padding: 20px 16px; }
   .stat-divider { display: none; }
   .stats-bar { flex-wrap: wrap; gap: 8px; }
+}
+
+/* ── 검색 과목 버튼 ───────────────── */
+.search-dept-btn {
+  padding: 7px 16px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  background: var(--surface);
+  color: var(--text2);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .18s;
+}
+.search-dept-btn:hover { border-color: var(--text); color: var(--text); }
+.search-dept-btn.active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+/* ── 검색 결과 카드 ───────────────── */
+.search-result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all .18s;
+}
+.search-result-card:hover { border-color: var(--text); background: var(--bg2); }
+.search-result-dept {
+  font-size: 11px;
+  color: var(--text3);
+  margin-bottom: 6px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.search-result-q {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.6;
 }
