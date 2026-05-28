@@ -4,30 +4,45 @@
 
 // ── 상태 ─────────────────────────────
 const state = {
-  questions:    [],   // 현재 퀴즈 문제 배열
-  index:        0,    // 현재 문제 인덱스
-  correct:      0,
-  wrong:        0,
-  answered:     false,
-  dept:         '',
-  mode:         'normal', // 'normal' | 'wrong'
+  questions: [],
+  index:     0,
+  correct:   0,
+  wrong:     0,
+  answered:  false,
+  dept:      '',
+  mode:      'normal',
 };
 
-// 누적 통계 (localStorage)
-let stats = JSON.parse(localStorage.getItem('mq_stats') || '{"total":0,"correct":0}');
-// 오답 맵 {id: questionObject}
+// 누적 통계
+let stats   = JSON.parse(localStorage.getItem('mq_stats') || '{"total":0,"correct":0}');
+// 오답 맵 {id: question}
 let wrongMap = JSON.parse(localStorage.getItem('mq_wrong') || '{}');
+// 나만의 문제 목록
+let myQuizList = JSON.parse(localStorage.getItem('mq_my_quiz') || '[]');
+
+// 전체 문제 캐시 (검색용)
+let allQuestionsCache = null;
+
+const FILE_MAP = {
+  '내과':     'internal',
+  '산부인과': 'ob',
+  '응급의학과':'emergency',
+  '소아청소년과':'pediatrics'
+};
+const DEPTS = ['내과','산부인과','응급의학과','소아청소년과'];
 
 // ── 페이지 전환 ───────────────────────
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0, 0);
-  if (id === 'page-home') updateHomeStats();
-  if (id === 'page-wrong-menu') updateWrongMenu();
+  if (id === 'page-home')          updateHomeStats();
+  if (id === 'page-wrong-menu')    updateWrongMenu();
+  if (id === 'page-my-quiz-menu')  updateMyQuizMenu();
+  if (id === 'page-search')        initSearch();
 }
 
-// ── 홈 통계 업데이트 ─────────────────
+// ── 홈 통계 ──────────────────────────
 function updateHomeStats() {
   const wrongCount = Object.keys(wrongMap).length;
   document.getElementById('home-wrong-count').textContent = wrongCount + '문제';
@@ -38,7 +53,73 @@ function updateHomeStats() {
   document.getElementById('stat-rate').textContent    = rate + '%';
 }
 
-// ── 퀴즈 시작 (과목별) ───────────────
+// ══════════════════════════════════════
+//  키워드 검색
+// ══════════════════════════════════════
+let searchDept = '전체';
+
+function selectSearchDept(btn) {
+  document.querySelectorAll('.search-dept-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  searchDept = btn.dataset.dept;
+  doSearch();
+}
+
+async function initSearch() {
+  // 전체 문제 로드 (캐시)
+  if (!allQuestionsCache) {
+    const results = await Promise.all(
+      Object.values(FILE_MAP).map(f => fetch('data/' + f + '.json').then(r => r.json()))
+    );
+    // 나만의 문제도 포함
+    allQuestionsCache = results.flat();
+  }
+  doSearch();
+}
+
+function doSearch() {
+  const keyword = (document.getElementById('search-input')?.value || '').trim();
+  const resultBox   = document.getElementById('search-results');
+  const countBox    = document.getElementById('search-result-count');
+  if (!allQuestionsCache) return;
+
+  // 풀에서 필터링: 과목 + 키워드
+  let pool = [...allQuestionsCache, ...myQuizList];
+  if (searchDept !== '전체') {
+    pool = pool.filter(q => q.dept === searchDept);
+  }
+  if (keyword) {
+    pool = pool.filter(q =>
+      q.question.includes(keyword) ||
+      (q.answer && q.answer.includes(keyword))
+    );
+  }
+
+  countBox.textContent = keyword
+    ? `"${keyword}" 검색 결과 ${pool.length}문제`
+    : `${searchDept === '전체' ? '전체' : searchDept} ${pool.length}문제`;
+
+  if (pool.length === 0) {
+    resultBox.innerHTML = '<div class="toast">검색 결과가 없어요.</div>';
+    return;
+  }
+
+  resultBox.innerHTML = pool.slice(0, 50).map((q, i) => `
+    <div class="search-result-card" onclick="startSingleQuiz(${JSON.stringify(JSON.stringify(q))})">
+      <div class="search-result-dept">${q.dept || '나만의문제'} · ${q.type === 1 ? '객관식' : '단답형'}</div>
+      <div class="search-result-q">${escHtml(q.question.slice(0, 80))}${q.question.length > 80 ? '...' : ''}</div>
+    </div>
+  `).join('') + (pool.length > 50 ? `<div class="toast" style="margin-top:12px;">상위 50개만 표시됩니다. 키워드를 더 구체적으로 입력하세요.</div>` : '');
+}
+
+function startSingleQuiz(qJson) {
+  const q = JSON.parse(qJson);
+  beginQuiz([q], q.dept || '검색결과', 'search');
+}
+
+// ══════════════════════════════════════
+//  퀴즈 시작
+// ══════════════════════════════════════
 async function startQuiz(dept, file) {
   showPage('page-loading');
   try {
@@ -52,16 +133,27 @@ async function startQuiz(dept, file) {
   }
 }
 
-// ── 오답 퀴즈 시작 ───────────────────
 function startWrongQuiz(dept) {
   let pool = Object.values(wrongMap);
-  if (dept !== 'MIX') pool = pool.filter(q => q.dept === dept);
-  if (pool.length === 0) { alert('해당 과목의 오답이 없습니다!'); return; }
+  if (dept === 'MIX') {
+    // 나만의 문제 오답도 포함
+  } else if (dept === '나만의문제') {
+    pool = pool.filter(q => q.isMyQuiz);
+  } else {
+    pool = pool.filter(q => q.dept === dept);
+  }
+  if (pool.length === 0) { alert('해당 오답이 없습니다!'); return; }
   pool = shuffle(pool);
-  beginQuiz(pool, dept === 'MIX' ? '전체 오답' : dept + ' 오답', 'wrong');
+  const label = dept === 'MIX' ? '전체 오답' : dept + ' 오답';
+  beginQuiz(pool, label, 'wrong');
 }
 
-// ── 퀴즈 초기화 ─────────────────────
+function startMyQuiz() {
+  if (myQuizList.length === 0) { alert('만든 문제가 없어요!'); return; }
+  const pool = shuffle([...myQuizList]);
+  beginQuiz(pool, '나만의 문제', 'my');
+}
+
 function beginQuiz(pool, dept, mode) {
   state.questions = pool;
   state.index     = 0;
@@ -74,18 +166,19 @@ function beginQuiz(pool, dept, mode) {
   renderQuiz();
 }
 
-// ── 퀴즈 렌더링 ─────────────────────
+// ══════════════════════════════════════
+//  퀴즈 렌더링
+// ══════════════════════════════════════
 function renderQuiz() {
   const q     = state.questions[state.index];
   const total = state.questions.length;
   const idx   = state.index;
 
-  // 상단 정보
-  document.getElementById('quiz-dept-badge').textContent   = state.dept;
-  document.getElementById('quiz-counter').textContent      = (idx + 1) + ' / ' + total;
+  document.getElementById('quiz-dept-badge').textContent    = state.dept;
+  document.getElementById('quiz-counter').textContent       = (idx + 1) + ' / ' + total;
   document.getElementById('quiz-correct-count').textContent = '✓ ' + state.correct;
   document.getElementById('quiz-wrong-count').textContent   = '✗ ' + state.wrong;
-  document.getElementById('quiz-progress').style.width     = Math.round(idx / total * 100) + '%';
+  document.getElementById('quiz-progress').style.width      = Math.round(idx / total * 100) + '%';
 
   // 번호 탭
   const tabs = document.getElementById('quiz-tabs');
@@ -95,63 +188,43 @@ function renderQuiz() {
     s.textContent = i + 1;
     s.style.cssText = 'width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:12px;' +
       (i === idx
-        ? 'background:var(--accent);color:#fff;font-weight:700;'
-        : 'background:var(--surface);color:var(--text3);border:1px solid var(--border);');
+        ? 'background:var(--text);color:var(--bg);font-weight:700;'
+        : 'background:var(--surface2);color:var(--text3);border:1px solid var(--border);');
     tabs.appendChild(s);
   }
 
-  // 문제 번호 + 타입
   const typeMap = {1:'객관식', 2:'단답형', 3:'서술형'};
   const typeClass = {1:'obj', 2:'short', 3:'essay'};
   document.getElementById('quiz-qnum').innerHTML =
     'Q.' + (idx + 1) +
     '<span class="q-type-tag ' + (typeClass[q.type] || 'obj') + '">' + (typeMap[q.type] || '') + '</span>';
-
-  // 문제 본문
   document.getElementById('quiz-qtext').textContent = q.question;
 
-  // 답변 영역
   renderAnswerArea(q);
 }
 
-// ── 답변 영역 렌더링 ────────────────
 function renderAnswerArea(q) {
   const area = document.getElementById('quiz-answer-area');
-
-  if (state.answered) {
-    renderAnswered(q, area);
-  } else {
-    renderInput(q, area);
-  }
+  state.answered ? renderAnswered(q, area) : renderInput(q, area);
 }
 
 function renderInput(q, area) {
   if (q.type === 1) {
-    // 객관식
     let html = '<div class="choices-form">';
     q.choices.forEach((choice, i) => {
-      html += `<label class="choice-label" onclick="selectChoice(this, ${i})">
+      html += `<label class="choice-label" onclick="selectChoice(this,${i})">
         <input type="radio" name="choice" value="${i}" style="display:none;">
         <span class="choice-num">${i + 1}</span>
         <span>${escHtml(choice)}</span>
       </label>`;
     });
-    html += '</div>';
-    html += '<button class="submit-btn" onclick="submitAnswer()">제출하기</button>';
+    html += '</div><button class="submit-btn" onclick="submitAnswer()">제출하기</button>';
     area.innerHTML = html;
-  } else if (q.type === 2) {
+  } else {
     area.innerHTML = `
       <div class="answer-input-group">
         <label class="answer-label">A. 답을 입력하세요</label>
         <input type="text" id="user-input" class="answer-input" placeholder="답을 입력하세요" />
-      </div>
-      <button class="submit-btn" onclick="submitAnswer()">제출하기</button>`;
-    setTimeout(() => document.getElementById('user-input')?.focus(), 100);
-  } else {
-    area.innerHTML = `
-      <div class="answer-input-group">
-        <label class="answer-label">A. 답을 서술하세요</label>
-        <textarea id="user-input" class="answer-input" placeholder="답을 서술하세요"></textarea>
       </div>
       <button class="submit-btn" onclick="submitAnswer()">제출하기</button>`;
     setTimeout(() => document.getElementById('user-input')?.focus(), 100);
@@ -161,11 +234,9 @@ function renderInput(q, area) {
 function renderAnswered(q, area) {
   const isCorrect = state._lastCorrect;
   const userAns   = state._lastUserAns;
-
   let html = '';
 
   if (q.type === 1) {
-    // 정답 번호 추출
     const ansNum  = extractNum(q.answer);
     const userNum = extractNum(userAns);
     html += '<div class="choices-form">';
@@ -183,7 +254,7 @@ function renderAnswered(q, area) {
   } else {
     html += `<div class="answer-input-group">
       <label class="answer-label">내 답변</label>
-      <div class="answer-input" style="opacity:.7;min-height:50px;white-space:pre-wrap;">${escHtml(userAns)}</div>
+      <div class="answer-input" style="opacity:.7;min-height:50px;">${escHtml(userAns)}</div>
     </div>`;
   }
 
@@ -194,11 +265,9 @@ function renderAnswered(q, area) {
   html += `<button class="next-btn" onclick="${isLast ? 'showResult()' : 'nextQuestion()'}">
     ${isLast ? '결과 보기 →' : '다음 문제 →'}
   </button>`;
-
   area.innerHTML = html;
 }
 
-// ── 선택지 클릭 ─────────────────────
 function selectChoice(label, idx) {
   document.querySelectorAll('.choice-label').forEach(l => {
     l.style.borderColor = '';
@@ -206,14 +275,13 @@ function selectChoice(label, idx) {
     const num = l.querySelector('.choice-num');
     if (num) { num.style.background = ''; num.style.color = ''; }
   });
-  label.style.borderColor = 'var(--accent)';
-  label.style.background  = 'rgba(77,141,245,0.06)';
+  label.style.borderColor = 'var(--text)';
+  label.style.background  = 'var(--surface2)';
   const num = label.querySelector('.choice-num');
-  if (num) { num.style.background = 'var(--accent)'; num.style.color = '#fff'; }
+  if (num) { num.style.background = 'var(--text)'; num.style.color = 'var(--bg)'; }
   label.querySelector('input').checked = true;
 }
 
-// ── 답 제출 ─────────────────────────
 function submitAnswer() {
   const q = state.questions[state.index];
   let userAns = '';
@@ -229,9 +297,9 @@ function submitAnswer() {
   }
 
   const isCorrect = checkAnswer(userAns, q);
-  state.answered      = true;
-  state._lastCorrect  = isCorrect;
-  state._lastUserAns  = userAns;
+  state.answered     = true;
+  state._lastCorrect = isCorrect;
+  state._lastUserAns = userAns;
 
   if (isCorrect) {
     state.correct++;
@@ -241,29 +309,25 @@ function submitAnswer() {
     wrongMap[q.id] = q;
   }
 
-  // 누적 통계
   stats.total++;
   if (isCorrect) stats.correct++;
   saveData();
-
   renderAnswerArea(q);
 }
 
-// ── 다음 문제 ────────────────────────
 function nextQuestion() {
   state.index++;
   state.answered = false;
   renderQuiz();
 }
 
-// ── 결과 표시 ────────────────────────
 function showResult() {
-  const total   = state.correct + state.wrong;
-  const rate    = total > 0 ? Math.round(state.correct / total * 100) : 0;
-  const offset  = 314.16 - (rate / 100 * 314.16);
-  const color   = rate >= 70 ? 'var(--green)' : rate >= 50 ? 'var(--yellow)' : 'var(--red)';
-  const emoji   = rate >= 90 ? '🏆' : rate >= 70 ? '🎉' : rate >= 50 ? '📚' : '💪';
-  const title   = rate >= 90 ? '완벽합니다!' : rate >= 70 ? '잘 하셨어요!' : rate >= 50 ? '조금 더 공부해봐요' : '오답 복습으로 실력을 키워봐요!';
+  const total  = state.correct + state.wrong;
+  const rate   = total > 0 ? Math.round(state.correct / total * 100) : 0;
+  const offset = 314.16 - (rate / 100 * 314.16);
+  const color  = rate >= 70 ? 'var(--green)' : rate >= 50 ? 'var(--yellow)' : 'var(--red)';
+  const emoji  = rate >= 90 ? '🏆' : rate >= 70 ? '🎉' : rate >= 50 ? '📚' : '💪';
+  const title  = rate >= 90 ? '완벽합니다!' : rate >= 70 ? '잘 하셨어요!' : rate >= 50 ? '조금 더 공부해봐요' : '오답 복습으로 실력을 키워봐요!';
 
   document.getElementById('result-emoji').textContent   = emoji;
   document.getElementById('result-title').textContent   = title;
@@ -273,20 +337,20 @@ function showResult() {
   document.getElementById('result-total').textContent   = total;
 
   const ring = document.getElementById('ring-fg');
-  ring.style.stroke          = color;
+  ring.style.stroke = color;
   ring.style.strokeDashoffset = 314.16;
   setTimeout(() => { ring.style.transition = 'stroke-dashoffset 1s ease'; ring.style.strokeDashoffset = offset; }, 100);
 
-  // 버튼
   let btns = '';
   if (state.wrong > 0) {
     btns += `<button class="action-btn primary" onclick="startWrongQuiz('${state.dept}')">오답만 다시 풀기</button>`;
   }
   if (state.mode === 'wrong') {
     btns += `<button class="action-btn secondary" onclick="showPage('page-wrong-menu')">오답노트로</button>`;
-  } else {
-    const fileMap = {'내과':'internal','산부인과':'ob','응급의학과':'emergency','소아청소년과':'pediatrics'};
-    const file = fileMap[state.dept];
+  } else if (state.mode === 'my') {
+    btns += `<button class="action-btn secondary" onclick="showPage('page-my-quiz-menu')">나만의 문제로</button>`;
+  } else if (state.mode === 'normal') {
+    const file = FILE_MAP[state.dept];
     if (file) btns += `<button class="action-btn secondary" onclick="startQuiz('${state.dept}','${file}')">같은 과목 다시</button>`;
   }
   btns += `<button class="action-btn ghost" onclick="showPage('page-home')">홈으로</button>`;
@@ -295,14 +359,20 @@ function showResult() {
   showPage('page-result');
 }
 
-// ── 오답노트 메뉴 업데이트 ───────────
+// ══════════════════════════════════════
+//  오답노트
+// ══════════════════════════════════════
 function updateWrongMenu() {
-  const all = Object.values(wrongMap);
+  const all   = Object.values(wrongMap);
   const total = all.length;
-  document.getElementById('wrong-total').textContent    = total;
+  document.getElementById('wrong-total').textContent     = total;
   document.getElementById('wrong-mix-count').textContent = total;
 
-  const depts = ['내과','산부인과','응급의학과','소아청소년과'];
+  const myWrong = all.filter(q => q.isMyQuiz);
+  const myBtn   = document.getElementById('wrong-my-btn');
+  document.getElementById('wrong-my-count').textContent = myWrong.length;
+  myBtn.style.display = myWrong.length > 0 ? 'flex' : 'none';
+
   const grid  = document.getElementById('wrong-dept-grid');
   const empty = document.getElementById('wrong-empty');
   const mixBtn = document.getElementById('wrong-mix-btn');
@@ -318,7 +388,7 @@ function updateWrongMenu() {
   mixBtn.style.display = 'flex';
 
   grid.innerHTML = '';
-  depts.forEach(dept => {
+  DEPTS.forEach(dept => {
     const count = all.filter(q => q.dept === dept).length;
     if (count === 0) return;
     const btn = document.createElement('button');
@@ -329,7 +399,6 @@ function updateWrongMenu() {
   });
 }
 
-// ── 오답 초기화 ──────────────────────
 function clearWrong() {
   if (!confirm('오답 목록을 초기화할까요?')) return;
   wrongMap = {};
@@ -337,13 +406,149 @@ function clearWrong() {
   updateWrongMenu();
 }
 
-// ── 홈으로 확인 ─────────────────────
-function confirmHome() {
-  if (state.answered || state.index === 0) { showPage('page-home'); return; }
-  if (confirm('퀴즈를 종료하고 홈으로 돌아갈까요?')) showPage('page-home');
+// ══════════════════════════════════════
+//  나만의 문제
+// ══════════════════════════════════════
+let createType = 1;
+let editingId  = null;
+
+function updateMyQuizMenu() {
+  const total = myQuizList.length;
+  document.getElementById('my-quiz-total').textContent = total;
+  const empty   = document.getElementById('my-quiz-empty');
+  const playArea = document.getElementById('my-quiz-play-area');
+  const list    = document.getElementById('my-quiz-list');
+
+  if (total === 0) {
+    empty.style.display    = 'block';
+    playArea.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  empty.style.display    = 'none';
+  playArea.style.display = 'block';
+
+  list.innerHTML = myQuizList.map((q, i) => `
+    <div class="search-result-card" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+      <div style="flex:1;" onclick="startSingleQuiz(${JSON.stringify(JSON.stringify(q))})">
+        <div class="search-result-dept">${q.dept} · ${q.type === 1 ? '객관식' : '단답형'}</div>
+        <div class="search-result-q">${escHtml(q.question.slice(0,60))}${q.question.length>60?'...':''}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button onclick="editMyQuiz(${i})" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:12px;">수정</button>
+        <button onclick="deleteMyQuiz(${i})" style="background:var(--red-bg);border:1px solid var(--red);color:var(--red);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:12px;">삭제</button>
+      </div>
+    </div>
+  `).join('');
 }
 
-// ── 정답 판정 ────────────────────────
+function setCreateType(type) {
+  createType = type;
+  const area = document.getElementById('create-choices-area');
+  const lbl  = document.getElementById('create-answer-label');
+  const num1 = document.getElementById('type-num-1');
+  const num2 = document.getElementById('type-num-2');
+
+  if (type === 1) {
+    area.style.display = 'block';
+    lbl.textContent = '정답 (번호 입력, 예: 3)';
+    num1.style.background = 'var(--text)'; num1.style.color = 'var(--bg)';
+    num2.style.background = ''; num2.style.color = '';
+  } else {
+    area.style.display = 'none';
+    lbl.textContent = '정답';
+    num2.style.background = 'var(--text)'; num2.style.color = 'var(--bg)';
+    num1.style.background = ''; num1.style.color = '';
+  }
+  document.querySelector(`input[name="create-type"][value="${type}"]`).checked = true;
+}
+
+function openCreatePage(clearForm = true) {
+  if (clearForm) {
+    editingId = null;
+    document.getElementById('create-page-title').textContent = '문제 만들기';
+    document.getElementById('create-dept').value = '내과';
+    document.getElementById('create-question').value = '';
+    document.getElementById('create-answer').value = '';
+    document.getElementById('create-edit-id').value = '';
+    document.querySelectorAll('#create-choices-list input').forEach(inp => inp.value = '');
+    setCreateType(1);
+  }
+  showPage('page-my-quiz-create');
+}
+
+function editMyQuiz(idx) {
+  const q = myQuizList[idx];
+  editingId = idx;
+  document.getElementById('create-page-title').textContent = '문제 수정';
+  document.getElementById('create-dept').value = q.dept;
+  document.getElementById('create-question').value = q.question;
+  document.getElementById('create-answer').value = q.answer;
+  document.getElementById('create-edit-id').value = idx;
+  setCreateType(q.type);
+
+  if (q.type === 1 && q.choices) {
+    const inputs = document.querySelectorAll('#create-choices-list input');
+    inputs.forEach((inp, i) => inp.value = q.choices[i] || '');
+  }
+  showPage('page-my-quiz-create');
+}
+
+function deleteMyQuiz(idx) {
+  if (!confirm('이 문제를 삭제할까요?')) return;
+  const q = myQuizList[idx];
+  myQuizList.splice(idx, 1);
+  // 오답에서도 제거
+  delete wrongMap[q.id];
+  saveData();
+  updateMyQuizMenu();
+}
+
+function saveMyQuiz() {
+  const dept     = document.getElementById('create-dept').value;
+  const question = document.getElementById('create-question').value.trim();
+  const answer   = document.getElementById('create-answer').value.trim();
+
+  if (!question) { alert('문제 본문을 입력해주세요!'); return; }
+  if (!answer)   { alert('정답을 입력해주세요!'); return; }
+
+  let choices = [];
+  if (createType === 1) {
+    const inputs = document.querySelectorAll('#create-choices-list input');
+    choices = Array.from(inputs).map((inp, i) => `${i+1}) ${inp.value.trim()}`).filter((c, i) => {
+      const val = c.replace(/^\d\) /, '').trim();
+      return val !== '';
+    });
+    if (choices.length < 2) { alert('선택지를 최소 2개 입력해주세요!'); return; }
+  }
+
+  const editIdVal = document.getElementById('create-edit-id').value;
+  const isEdit = editIdVal !== '';
+
+  const q = {
+    id:        isEdit ? myQuizList[parseInt(editIdVal)].id : 'my_' + Date.now(),
+    type:      createType,
+    dept:      dept,
+    question:  question,
+    choices:   choices,
+    answer:    createType === 1 ? answer + ') ' + (choices[parseInt(answer)-1]?.replace(/^\d\) /,'') || '') : answer,
+    isMyQuiz:  true
+  };
+
+  if (isEdit) {
+    myQuizList[parseInt(editIdVal)] = q;
+  } else {
+    myQuizList.push(q);
+  }
+
+  saveData();
+  alert(isEdit ? '문제가 수정되었어요!' : '문제가 저장되었어요!');
+  showPage('page-my-quiz-menu');
+}
+
+// ══════════════════════════════════════
+//  공통 유틸
+// ══════════════════════════════════════
 function checkAnswer(userAns, q) {
   if (q.type === 1) {
     return extractNum(userAns) === extractNum(q.answer);
@@ -360,7 +565,6 @@ function extractNum(s) {
   return s.trim();
 }
 
-// ── 유틸 ────────────────────────────
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -376,9 +580,31 @@ function escHtml(s) {
 }
 
 function saveData() {
-  localStorage.setItem('mq_stats', JSON.stringify(stats));
-  localStorage.setItem('mq_wrong', JSON.stringify(wrongMap));
+  localStorage.setItem('mq_stats',   JSON.stringify(stats));
+  localStorage.setItem('mq_wrong',   JSON.stringify(wrongMap));
+  localStorage.setItem('mq_my_quiz', JSON.stringify(myQuizList));
 }
+
+function confirmHome() {
+  if (!state.answered && state.index > 0) {
+    if (!confirm('퀴즈를 종료하고 홈으로 돌아갈까요?')) return;
+  }
+  showPage('page-home');
+}
+
+// ── 검색 버튼 홈에 추가 ──────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // 홈 검색 버튼 삽입
+  const wrongSection = document.querySelector('.wrong-section');
+  if (wrongSection) {
+    const searchBtn = document.createElement('div');
+    searchBtn.style.cssText = 'text-align:center;margin-bottom:16px;';
+    searchBtn.innerHTML = `<button class="wrong-btn" onclick="showPage('page-search')">
+      <span>🔍 키워드 검색</span>
+    </button>`;
+    wrongSection.parentNode.insertBefore(searchBtn, wrongSection);
+  }
+});
 
 // ── 초기화 ───────────────────────────
 updateHomeStats();
