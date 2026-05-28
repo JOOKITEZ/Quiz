@@ -1,11 +1,11 @@
-# 🏥 의사국가고시 필기 퀴즈 트레이너
+# 의사국가고시 필기 퀴즈 트레이너
 
 과목별 문제 풀기, 오답 복습, 정답률 통계를 제공하는 의사국가고시 대비 퀴즈 앱입니다.
 GitHub Pages로 즉시 배포 가능한 **순수 HTML/CSS/JS** 앱입니다.
 
 ---
 
-## 📁 프로젝트 구조
+## 프로젝트 구조
 
 ```
 medical-quiz/
@@ -25,7 +25,7 @@ medical-quiz/
 
 ---
 
-## ➕ 문제 추가 방법
+## 문제 추가 방법
 
 ### 1. JSON 파일 형식
 
@@ -63,32 +63,6 @@ const QUESTION_FILES = {
   // ...
 };
 ```
-
----
-
-## 🚀 GitHub Pages 배포
-
-### 방법 1: GitHub.com에서 직접 업로드
-
-1. GitHub에서 새 repository 생성
-2. 모든 파일을 업로드
-3. Settings → Pages → Source: `main` branch, `/ (root)` 선택
-4. `https://[username].github.io/[repo-name]/` 로 접속
-
-### 방법 2: Git으로 배포
-
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin https://github.com/[username]/[repo-name].git
-git push -u origin main
-```
-
-그 다음 GitHub Settings → Pages 에서 배포 활성화.
-
----
-
 ## ✨ 주요 기능
 
 | 기능 | 설명 |
